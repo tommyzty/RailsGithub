@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@color/white"
+    android:background="@color/colorPrimaryDark"
     android:id="@+id/popup">
 
     <TextView android:id="@+id/comment_text"
@@ -11,12 +11,23 @@
         android:layout_height="wrap_content"
         android:textAppearance="?android:attr/textAppearanceLarge"
         android:layout_gravity="center_horizontal"
-        android:text="Hi"/>
+        android:maxLines = "15"
+        android:scrollbars = "vertical"
+        android:text="@string/comment_default"/>
+
+    <TextView android:id="@+id/comment_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:layout_gravity="center_horizontal"
+        android:textSize="8pt"
+        android:textColor="@color/colorPrimary"
+        android:scrollbars = "vertical"/>
 
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="OKAY"
+        android:text="@string/close"
         android:layout_gravity="center_horizontal"
         android:onClick="dismissPopup"/>
 

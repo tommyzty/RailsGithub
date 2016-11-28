@@ -1,6 +1,5 @@
 package com.example.tommyzty.railsgithub;
 
-import java.util.ArrayList;
 import java.util.Date;
 
 public class Issue {
@@ -18,8 +17,8 @@ public class Issue {
         this.number = number;
         this.title = title;
         this.body = body;
-        this.comments = comments;
         this.date = date;
+        this.comments = comments;
     }
 
     public int getNumber() {
@@ -34,15 +33,21 @@ public class Issue {
         return title;
     }
 
-    public void setTitle(String title) { this.title = title; }
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
     public String getBody() {
         return this.body;
     }
 
-    public void setBody(String body) { this.body = body; }
+    public void setBody(String body) {
+        this.body = body;
+    }
 
-    public String getComments() { return this.comments; }
+    public String getComments() {
+        return this.comments;
+    }
 
     public void setComments(String comments) {
         this.comments = comments;
@@ -55,6 +60,4 @@ public class Issue {
     public void setDate(Date date) {
         this.date = date;
     }
-
-
 }

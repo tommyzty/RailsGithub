@@ -6,9 +6,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.TextView;
-
-import org.w3c.dom.Text;
-
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -87,6 +84,7 @@ public class IssueAdapter extends BaseAdapter {
         TextView col1 = (TextView) convertView.findViewById(R.id.column1);
         TextView col2 = (TextView) convertView.findViewById(R.id.column2);
         String body = list.get(position).getBody();
+        body = body.replace("\r\n", "\n").replace("\n\n", "\n").trim();
         body = body.substring(0, Math.min(body.length(), MAX_LEN));
         col0.setText(String.valueOf(list.get(position).getNumber()));
         col1.setText(list.get(position).getTitle());

@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">Rails Organization Github Issues</string>
     <string name="action_settings">Settings</string>
+    <string name="comment_default">No Comment</string>
+    <string name="close">Close</string>
 </resources>

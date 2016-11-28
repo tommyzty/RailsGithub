@@ -10,6 +10,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.method.ScrollingMovementMethod;
 import android.util.JsonReader;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -21,6 +22,7 @@ import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -45,7 +47,8 @@ public class MainActivity extends AppCompatActivity {
     private PopupWindow popupWindow;
     private int temp_pos;
     private Issue current;
-    private String curr_comment;
+    private String API_URL = "https://api.github.com/repos/rails/rails/issues";
+    private String API_KEY = "?client_id=90c72de60f99fe373008&client_secret=5b5ab5644367bba33681ef3e36cec7c81a124949";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,7 +64,6 @@ public class MainActivity extends AppCompatActivity {
         columnHeader0.setText(number);
         columnHeader1.setText(title);
         columnHeader2.setText(body);
-        String API_URL = "https://api.github.com/repos/rails/rails/issues";
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED) {
             ConnectivityManager connMgr = (ConnectivityManager)
@@ -69,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
             NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
             if (networkInfo != null && networkInfo.isConnected()) {
                 try {
-                    new NetworkConnection().execute(API_URL);
+                    new NetworkConnection().execute(API_URL + API_KEY);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -119,9 +121,8 @@ public class MainActivity extends AppCompatActivity {
                 } catch (ParseException e) {
                     e.printStackTrace();
                 }
-
-                String comments_url = jObject.getString("comments_url");
-                Issue issue = new Issue(number, title, body, comments_url, date);
+                String comments = jObject.getString("comments");
+                Issue issue = new Issue(number, title, body, comments, date);
                 issues.add(issue);
                 i++;
             }
@@ -139,24 +140,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void commentResult(ArrayList<JSONObject> result) {
-        int j = 0;
-        String comment = "";
-        while (j < result.size()) {
-            JSONObject comment_obj = result.get(j);
-            String user = "";
-            String comment_body = "";
-            try {
-                user = comment_obj.getString("user");
-                comment_body = comment_obj.getString("body");
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-            comment = comment + "Username: " + user + "\nComment: " + comment_body + "\n\n";
-        }
-        curr_comment = comment;
-    }
-
     void showPopup() {
         LayoutInflater layoutInflater = (LayoutInflater) getBaseContext()
                 .getSystemService(LAYOUT_INFLATER_SERVICE);
@@ -164,9 +147,41 @@ public class MainActivity extends AppCompatActivity {
                 (ViewGroup) findViewById(R.id.popup));
         popupWindow = new PopupWindow(popupView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popupWindow.showAtLocation(popupView, Gravity.CENTER, 0, 0);
-        TextView comment = (TextView) popupView.findViewById(R.id.comment_text);
-        String text = current.getComments();
-        comment.setText(text);
+        final TextView comment = (TextView) popupView.findViewById(R.id.comment_text);
+        String text = "";
+        String comments = current.getComments();
+        try {
+            ArrayList<JSONObject> comments_list = new NetworkConnection().execute(comments + API_KEY).get();
+            for (int i = 0; i < comments_list.size(); i++) {
+                JSONObject comment_obj = comments_list.get(i);
+                String user = "";
+                String comment_body = "";
+                try {
+                    user = comment_obj.getString("user");
+                    comment_body = comment_obj.getString("body");
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                comment_body = comment_body.replace("\r\n", "\n").replace("\n\n", "\n").trim();
+                text = text + "Username: " + user + "\nComment: " + comment_body + "\n\n";
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        if (!text.isEmpty()) {
+            comment.setText(text);
+            comment.setMovementMethod(new ScrollingMovementMethod());
+            comment.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (comment.getLineCount() > 15) {
+                        TextView hint = (TextView) popupView.findViewById(R.id.comment_hint);
+                        String h = "Scroll down to see more";
+                        hint.setText(h);
+                    }
+                }
+            });
+        }
     }
 
     private final AdapterView.OnItemClickListener onListClick = new AdapterView.OnItemClickListener() {
@@ -198,10 +213,10 @@ public class MainActivity extends AppCompatActivity {
         // displays the results of the AsyncTask.
         @Override
         protected void onPostExecute(ArrayList<JSONObject> result) {
-            if (curr_url == "https://api.github.com/repos/rails/rails/issues") {
-                handleResult(result);
-            } else {
-                commentResult(result);
+            if (result != null) {
+                if (curr_url.equals(API_URL + API_KEY)) {
+                    handleResult(result);
+                }
             }
         }
 
@@ -246,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
         JSONObject parseJSON(JsonReader reader, String url) throws IOException {
             JSONObject jObject = new JSONObject();
             reader.beginObject();
-            if (url == "https://api.github.com/repos/rails/rails/issues") {
+            if (curr_url.equals(API_URL + API_KEY)) {
                 while (reader.hasNext()) {
                     String name = reader.nextName();
                     if (name.equals("number")) {
@@ -275,7 +290,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     } else if (name.equals("comments_url")) {
                         try {
-                            jObject.put("comments_url", reader.nextString());
+                            jObject.put("comments", reader.nextString());
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
@@ -286,9 +301,9 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 while (reader.hasNext()) {
                     String name = reader.nextName();
-                    if (name.equals("login")) {
+                    if (name.equals("user")) {
                         try {
-                            jObject.put("user", reader.nextString());
+                            jObject.put("user", readLogin(reader));
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
@@ -305,6 +320,22 @@ public class MainActivity extends AppCompatActivity {
             }
             reader.endObject();
             return jObject;
+        }
+
+        public String readLogin(JsonReader reader) throws IOException {
+            String username = null;
+
+            reader.beginObject();
+            while (reader.hasNext()) {
+                String name = reader.nextName();
+                if (name.equals("login")) {
+                    username = reader.nextString();
+                } else {
+                    reader.skipValue();
+                }
+            }
+            reader.endObject();
+            return username;
         }
     }
 }
