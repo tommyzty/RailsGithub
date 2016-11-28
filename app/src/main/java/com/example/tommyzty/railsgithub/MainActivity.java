@@ -21,15 +21,11 @@ import android.widget.ListView;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.Array;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.DateFormat;
@@ -45,10 +41,8 @@ public class MainActivity extends AppCompatActivity {
     private ListView listView;
     private View popupView;
     private PopupWindow popupWindow;
-    private int temp_pos;
     private Issue current;
     private String API_URL = "https://api.github.com/repos/rails/rails/issues";
-    private String API_KEY = "?client_id=90c72de60f99fe373008&client_secret=5b5ab5644367bba33681ef3e36cec7c81a124949";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,7 +65,8 @@ public class MainActivity extends AppCompatActivity {
             NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
             if (networkInfo != null && networkInfo.isConnected()) {
                 try {
-                    new NetworkConnection().execute(API_URL + API_KEY);
+                    // make a GET request to Github API
+                    handleResult(new NetworkConnection().execute(API_URL).get());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -90,7 +85,6 @@ public class MainActivity extends AppCompatActivity {
                                            String permissions[], int[] grantResults) {
         switch (requestCode) {
             case MY_PERMISSIONS_REQUEST_INTERNET: {
-                // If request is cancelled, the result arrays are empty.
                 if (grantResults[0] == PackageManager.PERMISSION_DENIED) {
                     Toast.makeText(getApplicationContext(), "Network Access Needed for this APP!", Toast.LENGTH_LONG).show();
                     ActivityCompat.requestPermissions(this,
@@ -105,6 +99,8 @@ public class MainActivity extends AppCompatActivity {
         popupWindow.dismiss();
     }
 
+    // handle result from AsyncTask's GET request,
+    // parse json result into Issue class and set adapter for listView
     public void handleResult(ArrayList<JSONObject> result) {
         DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
@@ -132,13 +128,24 @@ public class MainActivity extends AppCompatActivity {
                 adapter.insert(issues.get(i));
                 i++;
             }
+            // sort by newest update
             adapter.sort();
+            // generate listview
             listView.setAdapter(adapter);
+            // handle list item click
             listView.setOnItemClickListener(onListClick);
         } catch (JSONException e) {
             e.printStackTrace();
         }
     }
+
+    // shows a popup window when click on a list item
+    private final AdapterView.OnItemClickListener onListClick = new AdapterView.OnItemClickListener() {
+        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+            current = adapter.getItem(position);
+            showPopup();
+        }
+    };
 
     void showPopup() {
         LayoutInflater layoutInflater = (LayoutInflater) getBaseContext()
@@ -151,23 +158,36 @@ public class MainActivity extends AppCompatActivity {
         String text = "";
         String comments = current.getComments();
         try {
-            ArrayList<JSONObject> comments_list = new NetworkConnection().execute(comments + API_KEY).get();
-            for (int i = 0; i < comments_list.size(); i++) {
-                JSONObject comment_obj = comments_list.get(i);
-                String user = "";
-                String comment_body = "";
+            ConnectivityManager connMgr = (ConnectivityManager)
+                    getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
+            // get comments url from current Issue, and initiate a GET request to get comments for that issue
+            if (networkInfo != null && networkInfo.isConnected()) {
                 try {
-                    user = comment_obj.getString("user");
-                    comment_body = comment_obj.getString("body");
-                } catch (JSONException e) {
+                    ArrayList<JSONObject> comments_list = new NetworkConnection().execute(comments).get();
+                    for (int i = 0; i < comments_list.size(); i++) {
+                        JSONObject comment_obj = comments_list.get(i);
+                        String user = "";
+                        String comment_body = "";
+                        try {
+                            user = comment_obj.getString("user");
+                            comment_body = comment_obj.getString("body");
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                        comment_body = comment_body.replace("\r\n", "\n").replace("\n\n", "\n").trim();
+                        text = text + "Username: " + user + "\nComment: " + comment_body + "\n\n";
+                    }
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
-                comment_body = comment_body.replace("\r\n", "\n").replace("\n\n", "\n").trim();
-                text = text + "Username: " + user + "\nComment: " + comment_body + "\n\n";
+            } else {
+                Toast.makeText(getApplicationContext(), "Network Connection Error!", Toast.LENGTH_LONG).show();
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
+        // set up contents of the pop up window
         if (!text.isEmpty()) {
             comment.setText(text);
             comment.setMovementMethod(new ScrollingMovementMethod());
@@ -184,21 +204,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private final AdapterView.OnItemClickListener onListClick = new AdapterView.OnItemClickListener() {
-        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-            temp_pos = position;
-            current = adapter.getItem(position);
-            showPopup();
-        }
-    };
-
     /*
     * A Class for HTTP GET method
     * Retrieve JSON files from an API
     */
     private class NetworkConnection extends AsyncTask<String, Void, ArrayList<JSONObject>> {
         private String curr_url;
-
         @Override
         protected ArrayList<JSONObject> doInBackground(String... urls) {
             System.out.println("Sending Http GET request");
@@ -209,17 +220,9 @@ public class MainActivity extends AppCompatActivity {
                 return null;
             }
         }
-
-        // displays the results of the AsyncTask.
         @Override
         protected void onPostExecute(ArrayList<JSONObject> result) {
-            if (result != null) {
-                if (curr_url.equals(API_URL + API_KEY)) {
-                    handleResult(result);
-                }
-            }
         }
-
         private ArrayList<JSONObject> downloadUrl(String myUrl) throws IOException {
             InputStream is = null;
             try {
@@ -235,21 +238,20 @@ public class MainActivity extends AppCompatActivity {
                 int response = conn.getResponseCode();
                 System.out.println("The response is: " + response);
                 is = conn.getInputStream();
-                return readJsonStream(is, myUrl);
+                return readJsonStream(is);
             } finally {
                 if (is != null) {
                     is.close();
                 }
             }
         }
-
-        ArrayList<JSONObject> readJsonStream(InputStream in, String url) throws IOException {
+        ArrayList<JSONObject> readJsonStream(InputStream in) throws IOException {
             JsonReader reader = new JsonReader(new InputStreamReader(in, "UTF-8"));
             ArrayList<JSONObject> jArray = new ArrayList<>();
             try {
                 reader.beginArray();
                 while (reader.hasNext()) {
-                    jArray.add(parseJSON(reader, url));
+                    jArray.add(parseJSON(reader));
                 }
                 reader.endArray();
             } finally {
@@ -257,11 +259,11 @@ public class MainActivity extends AppCompatActivity {
             }
             return jArray;
         }
-
-        JSONObject parseJSON(JsonReader reader, String url) throws IOException {
+        JSONObject parseJSON(JsonReader reader) throws IOException {
             JSONObject jObject = new JSONObject();
             reader.beginObject();
-            if (curr_url.equals(API_URL + API_KEY)) {
+            if (curr_url.equals(API_URL)) {
+                // json file for Issues
                 while (reader.hasNext()) {
                     String name = reader.nextName();
                     if (name.equals("number")) {
@@ -299,6 +301,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             } else {
+                // json file for comments
                 while (reader.hasNext()) {
                     String name = reader.nextName();
                     if (name.equals("user")) {
@@ -321,10 +324,8 @@ public class MainActivity extends AppCompatActivity {
             reader.endObject();
             return jObject;
         }
-
-        public String readLogin(JsonReader reader) throws IOException {
+        String readLogin(JsonReader reader) throws IOException {
             String username = null;
-
             reader.beginObject();
             while (reader.hasNext()) {
                 String name = reader.nextName();
